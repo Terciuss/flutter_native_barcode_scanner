@@ -29,6 +29,8 @@ class BarcodeScannerWidget extends StatefulWidget {
   /// The type of scanner which should decode the image and scan data
   final ScannerType scannerType;
 
+  final int scanInterval;
+
   /// This function will be called when a barcode is detected.
   final Function(Barcode barcode)? onBarcodeDetected;
 
@@ -42,19 +44,20 @@ class BarcodeScannerWidget extends StatefulWidget {
 
   final Function(dynamic error) onError;
 
-  const BarcodeScannerWidget(
-      {Key? key, this.cameraSelector = CameraSelector.back,
-        this.startScanning = true,
-        this.stopScanOnBarcodeDetected = true,
-        this.orientation = CameraOrientation.portrait,
-        this.scannerType = ScannerType.barcode,
-        this.onBarcodeDetected,
-        this.onTextDetected,
-        this.onMrzDetected,
-        this.onScanProgress,
-        required this.onError,
-      })
-      : assert(onBarcodeDetected != null || onTextDetected != null),
+  const BarcodeScannerWidget({
+    Key? key,
+    this.cameraSelector = CameraSelector.back,
+    this.startScanning = true,
+    this.stopScanOnBarcodeDetected = true,
+    this.orientation = CameraOrientation.portrait,
+    this.scannerType = ScannerType.barcode,
+    this.scanInterval = 1000,
+    this.onBarcodeDetected,
+    this.onTextDetected,
+    this.onMrzDetected,
+    this.onScanProgress,
+    required this.onError,
+  })  : assert(onBarcodeDetected != null || onTextDetected != null),
         super(key: key);
 
   @override
@@ -63,10 +66,15 @@ class BarcodeScannerWidget extends StatefulWidget {
 
 class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
   static const String platformViewChannel = 'be.freedelity/native_scanner/view';
-  static const EventChannel eventChannel = EventChannel('be.freedelity/native_scanner/imageStream');
+  static const EventChannel eventChannel =
+      EventChannel('be.freedelity/native_scanner/imageStream');
 
   late Map<String, dynamic> creationParams;
   late StreamSubscription eventSubscription;
+
+  late Timer intervalTimer;
+
+  late bool lock = false;
 
   @override
   void initState() {
@@ -79,46 +87,49 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       'start_scanning': widget.startScanning,
     };
 
-    eventSubscription = eventChannel.receiveBroadcastStream().listen((dynamic event) async {
+    eventSubscription =
+        eventChannel.receiveBroadcastStream().listen((dynamic event) async {
+      if (lock) return;
 
       if (widget.onScanProgress != null) {
         widget.onScanProgress!(event["progress"] as int?);
       }
 
-      if (widget.onBarcodeDetected != null && widget.scannerType == ScannerType.barcode) {
-
+      if (widget.onBarcodeDetected != null &&
+          widget.scannerType == ScannerType.barcode) {
         final format = BarcodeFormat.unserialize(event['format']);
 
         if (format != null && event['barcode'] != null) {
+          lock = true;
+          intervalTimer =
+              new Timer(new Duration(milliseconds: widget.scanInterval), () {
+            lock = false;
+          });
 
-          await BarcodeScanner.stopScanner();
+          await widget.onBarcodeDetected!(
+              Barcode(format: format, value: event['barcode'] as String));
 
-          await widget.onBarcodeDetected!(Barcode(format: format, value: event['barcode'] as String));
-
-          if (!widget.stopScanOnBarcodeDetected) {
-            BarcodeScanner.startScanner();
+          if (widget.stopScanOnBarcodeDetected) {
+            BarcodeScanner.stopScanner();
           }
-
         } else if (event["progress"] == null) {
           widget.onError(const FormatException('Barcode not found'));
         }
-
-      } else if (widget.onTextDetected != null && widget.scannerType == ScannerType.text) {
-
+      } else if (widget.onTextDetected != null &&
+          widget.scannerType == ScannerType.text) {
         if (event['text'] != null) {
           await widget.onTextDetected!(event['text'] as String);
         } else if (event["progress"] == null) {
           widget.onError(const FormatException('Text not found'));
         }
-
-      } else if (widget.onMrzDetected != null && widget.scannerType == ScannerType.mrz) {
-
+      } else if (widget.onMrzDetected != null &&
+          widget.scannerType == ScannerType.mrz) {
         if (event['mrz'] != null && event["img"] != null) {
-          await widget.onMrzDetected!(event['mrz'] as String, Uint8List.fromList(event["img"]));
+          await widget.onMrzDetected!(
+              event['mrz'] as String, Uint8List.fromList(event["img"]));
         } else if (event["progress"] == null) {
           widget.onError(const FormatException('MRZ not found'));
         }
-
       }
     }, onError: (dynamic error) {
       widget.onError(error);
@@ -130,7 +141,8 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     try {
       eventSubscription.cancel();
     } on PlatformException catch (e) {
-      debugPrint("Intercept event subscription cancel exception on scanner disposed without stream initialized yet : $e");
+      debugPrint(
+          "Intercept event subscription cancel exception on scanner disposed without stream initialized yet : $e");
     }
     BarcodeScanner.closeCamera();
     super.dispose();
@@ -139,7 +151,11 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
   @override
   Widget build(BuildContext context) {
     if (Platform.isIOS) {
-      return UiKitView(viewType: platformViewChannel, layoutDirection: TextDirection.ltr, creationParams: creationParams, creationParamsCodec: const StandardMessageCodec());
+      return UiKitView(
+          viewType: platformViewChannel,
+          layoutDirection: TextDirection.ltr,
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec());
     }
 
     return Stack(children: [
@@ -148,7 +164,8 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           surfaceFactory: (context, controller) {
             return AndroidViewSurface(
               controller: controller as AndroidViewController,
-              gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+              gestureRecognizers: const <Factory<
+                  OneSequenceGestureRecognizer>>{},
               hitTestBehavior: PlatformViewHitTestBehavior.opaque,
             );
           },
@@ -164,7 +181,8 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                 })
               ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated);
           }),
-      const Positioned.fill(child: ModalBarrier(dismissible: false, color: Colors.transparent))
+      const Positioned.fill(
+          child: ModalBarrier(dismissible: false, color: Colors.transparent))
     ]);
   }
 }

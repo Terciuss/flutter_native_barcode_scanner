@@ -88,22 +88,16 @@ abstract class BarcodeScanner {
 
   /// Stop the scanner. No barcode will be produced until next call to `BarcodeScanner.startScanner`.
   static Future stopScanner() {
-    if (isRun) {
-      isRun = false;
-      return _channel.invokeMethod('stopScanner');
-    }
-
-    return Future.value(false);
+    // _channel.invokeMethod('stopScanner');
+    isRun = false;
+    return Future.value(true);
   }
 
   /// Start the scanning process. It is useful in case `BarcodeScanner.stopScanner` has been called before or if `BarcodeScannerWidget` has been created with `startScanning` set to `false`.
   static Future startScanner() {
-    if (!isRun) {
-      isRun = true;
-      return _channel.invokeMethod('startScanner');
-    }
-
-    return Future.value(false);
+    // _channel.invokeMethod('startScanner');
+    isRun = true;
+    return Future.value(true);
   }
 
   /// Close Android camera manually.

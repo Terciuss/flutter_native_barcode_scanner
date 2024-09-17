@@ -91,7 +91,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
 
     eventSubscription =
         eventChannel.receiveBroadcastStream().listen((dynamic event) async {
-      if (lock) return;
+      if (lock || !BarcodeScanner.isRun) return;
 
       if (widget.onScanProgress != null) {
         widget.onScanProgress!(event["progress"] as int?);

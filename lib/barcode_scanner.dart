@@ -76,6 +76,7 @@ enum CameraSelector { front, back }
 
 /// This provides static methods to alter how the barcode scanning process.
 abstract class BarcodeScanner {
+  static bool isRun = true;
   static const MethodChannel _channel =
       MethodChannel('be.freedelity/native_scanner/method');
 
@@ -86,10 +87,24 @@ abstract class BarcodeScanner {
   static Future flipCamera() => _channel.invokeMethod('flipCamera');
 
   /// Stop the scanner. No barcode will be produced until next call to `BarcodeScanner.startScanner`.
-  static Future stopScanner() => _channel.invokeMethod('stopScanner');
+  static Future stopScanner() {
+    if (isRun) {
+      isRun = false;
+      return _channel.invokeMethod('stopScanner');
+    }
+
+    return Future.value(false);
+  }
 
   /// Start the scanning process. It is useful in case `BarcodeScanner.stopScanner` has been called before or if `BarcodeScannerWidget` has been created with `startScanning` set to `false`.
-  static Future startScanner() => _channel.invokeMethod('startScanner');
+  static Future startScanner() {
+    if (!isRun) {
+      isRun = true;
+      return _channel.invokeMethod('startScanner');
+    }
+
+    return Future.value(false);
+  }
 
   /// Close Android camera manually.
   static Future closeCamera() => _channel.invokeMethod('closeCamera');

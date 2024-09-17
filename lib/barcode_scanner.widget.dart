@@ -87,6 +87,8 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       'start_scanning': widget.startScanning,
     };
 
+    BarcodeScanner.isRun = widget.startScanning;
+
     eventSubscription =
         eventChannel.receiveBroadcastStream().listen((dynamic event) async {
       if (lock) return;
